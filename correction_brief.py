@@ -21,6 +21,8 @@ from features_functions import compute_features
 from sklearn import preprocessing
 from sklearn import svm
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import plot_confusion_matrix
 from sklearn.metrics import accuracy_score
@@ -37,7 +39,14 @@ def filter_features(features, features_selector):
 
     return features
 
-def train_model(select_features=False, features_selector=[0]):
+def train_model(select_features=False, 
+                features_selector=[0], 
+                model_name="svm",
+                params={'C': 10, 
+                        'kernel': 'linear', 
+                        'class_weight': None,
+                        'probability':False},
+                verbose=True):
     """
     Convenience function for automated model testing. Parameters:
     - select_features : if set to False, all features are used. Otherwise,
@@ -45,6 +54,9 @@ def train_model(select_features=False, features_selector=[0]):
     - features_selector : only works if select_features is set at True. 
     It is an array-like object of length 71 (the max number of features) containing
     1s and 0s
+    - model_name : name of the model to use
+    - params : a dictionary containing the parameters for the model you want to use
+    - verbose : set to False to turn off information print during the training
     """
 
     # Set the paths to the files 
@@ -68,7 +80,7 @@ def train_model(select_features=False, features_selector=[0]):
         seq_length = 0.2 # Nbr of second of signal for one sequence
         nbr_of_obs = int(nbr_of_sigs*10/seq_length) # Each signal is 10 s long
 
-        print("COMPUTING FEATURES...")
+        if verbose: print("COMPUTING FEATURES...")
         t1 = time.time()
 
         # Go to search for the files
@@ -122,7 +134,7 @@ def train_model(select_features=False, features_selector=[0]):
         # print(len(learning_labels))
 
         t2 = time.time()
-        print(f"FEATURES COMPUTED IN {t2-t1}s")
+        if verbose: print(f"FEATURES COMPUTED IN {t2-t1}s")
 
     else:
         with open("features.pkl", "rb") as features_file: 
@@ -132,7 +144,7 @@ def train_model(select_features=False, features_selector=[0]):
 
     if select_features: learning_features = filter_features(learning_features, features_selector)
 
-    print("TRAINING MODEL...")
+    if verbose: print("TRAINING MODEL...")
     t3 = time.time()
 
     # Separate data in train and test
@@ -144,14 +156,19 @@ def train_model(select_features=False, features_selector=[0]):
     testLabelsStd = labelEncoder.transform(y_test)
 
     # Learn the model
-    model = svm.SVC(C=10, kernel='linear', class_weight=None, probability=False)
+    if model_name == "svm": model = svm.SVC(**params)
+    elif model_name == "k_neighbors": model = KNeighborsClassifier(**params)
+    elif model_name == "sgd": model = SGDClassifier(**params)
+    else: raise ValueError(f"Unknown model: {model_name}")
+
+    
     scaler = preprocessing.StandardScaler(with_mean=True).fit(X_train)
     learningFeatures_scaled = scaler.transform(X_train)
 
     model.fit(learningFeatures_scaled, learningLabelsStd)
 
     t4 = time.time()
-    print(f"MODEL TRAINED IN {t4-t3} s")
+    if verbose: print(f"MODEL TRAINED IN {t4-t3} s")
 
     # Test the model
     testFeatures_scaled = scaler.transform(X_test)
@@ -163,7 +180,9 @@ def train_model(select_features=False, features_selector=[0]):
     #plt.show()
 
     results = {
-                "model": "SVM",
+                "model_name": "SVM",
+                "params": params,
+                "model": model,
                 "accuracy": accuracy,
     }
     if select_features: results["features_used"] = features_selector
